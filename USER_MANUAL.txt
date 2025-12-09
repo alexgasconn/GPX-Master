@@ -1,0 +1,261 @@
+GPX MASTER PRO - COMPREHENSIVE USER MANUAL v1.1
+================================================================================
+
+1. INTRODUCTION & CORE PHILOSOPHY
+--------------------------------------------------------------------------------
+GPX Master Pro is a client-side, privacy-focused application for professional GPS data manipulation.
+Unlike standard route viewers, this tool allows for "atomic-level" editing of track points, 
+advanced algorithmic restoration, and multi-track comparison.
+
+Data Privacy: 
+- 100% Client-Side processing.
+- Files are parsed in browser memory.
+- No data is ever sent to a server.
+
+2. FILE MANAGEMENT (IMPORT & EXPORT)
+--------------------------------------------------------------------------------
+2.1. IMPORTING DATA
+   - Drag & Drop: Drag .gpx files directly anywhere onto the dashboard.
+   - "Add Track" Button: Located in the top-right header. Opens system file dialog.
+   - Supported Formats: GPX 1.0 and 1.1 standard schemas.
+   - Multi-File Support: You can load unlimited files sequentially. They will overlay on the map.
+
+2.2. EXPORTING DATA
+   - "Save GPX" (Tools Tab): Downloads the currently active track with all applied edits.
+   - "Download" Icon (Track List): Quick download for inactive tracks from the sidebar.
+   - Metadata Preservation: Exports valid GPX XML including time stamps and elevation data.
+
+2.3. TRACK MANAGEMENT SIDEBAR
+   - Visibility Toggle (Eye Icon): Show/Hide specific tracks on the map without unloading them.
+   - Active Track Selection: Click a track card to make it "Active". The active track is the one currently being edited/analyzed.
+   - Color Coding: Click the color dot to pick a custom HEX color for the track line.
+   - Delete Track (Trash Icon): Unloads the file from memory.
+   - Track Metadata Display: Shows Name, Total Distance (km), and Point Count summary.
+
+3. MAP VISUALIZATION & INTERACTION
+--------------------------------------------------------------------------------
+3.1. MAP LAYERS
+   - Top-right layer control allows switching between:
+     a. Dark Mode (CartoDB Dark Matter) - Best for contrast editing.
+     b. Light Mode (CartoDB Positron) - Clean standard view.
+     c. Satellite (Esri World Imagery) - For checking terrain/reality.
+     d. OpenStreetMap - Standard street view.
+
+3.2. ZOOM & NAVIGATION
+   - Scroll Wheel: Zoom in/out.
+   - Drag: Pan map.
+   - Extended Zoom Levels: Supports Zoom Level 22 (past standard tiles) for editing individual meters.
+
+3.3. TRACK INTERACTION
+   - Hover Highlight: Hovering the track line highlights it (thickens).
+   - "Fat Finger" Click Zone: The interaction line is invisible but 45px wide, making it easy to click the line even when zoomed out.
+   - Selection Halo: The currently selected track has a distinct opacity/weight compared to background tracks.
+
+3.4. POINT VISUALIZATION
+   - Toggle "Raw Points": Button located at the top of the POINT Tab or bottom-left of Map. Renders every single GPS point as a white dot.
+   - Selected Point: Rendered as a High-Contrast Double Ring (Red Core, White Border, Red Halo).
+   - Anchor Points: Rendered as Gold Stars.
+   - Anomaly Markers:
+     - Red Dots: Speed Spikes or Elevation Jumps.
+     - Orange Dots: Distance Gaps (Teleportation).
+
+4. DATA STATISTICS (DASHBOARD)
+--------------------------------------------------------------------------------
+The top bar displays real-time calculated metrics for the Active Track:
+
+4.1. DISTANCE
+   - Total length of the track in Kilometers.
+
+4.2. ELEVATION
+   - Elev Gain: Total accumulated ascent (meters).
+   - Loss: Total accumulated descent (meters).
+
+4.3. EXTREMES
+   - Max Elev: Highest point recorded.
+   - Min Elev: Lowest point recorded.
+
+4.4. DENSITY (Health Metric)
+   - Points count (e.g., "1,240 pts").
+   - Density Score (Points per KM).
+   - Spacing (Average meters between points). 
+   *Use Case*: High spacing (>50m) implies a low-quality track that might need "Densification".
+
+5. ANALYSIS & CHARTS
+--------------------------------------------------------------------------------
+Toggle the Right Sidebar to "PROFILE" mode.
+
+5.1. ELEVATION PROFILE
+   - Interactive Area Chart: Plot of Altitude (y) vs Distance (x).
+   - Hover Sync: Hovering over the chart draws a focus circle on the exact location on the Map.
+   - Dynamic Domain: Y-Axis scales automatically to the min/max elevation of the track.
+
+6. THE EDITOR (TOOLS & ALGORITHMS)
+--------------------------------------------------------------------------------
+Toggle the Right Sidebar to "EDITOR" mode.
+
+6.1. TAB 1: TOOLS (Global Operations)
+   A. FILE ACTIONS
+      - Undo: Reverts the last action. Stores up to 20 history states.
+      - Save GPX: Exports current state.
+
+   B. GEOMETRY TOOLS
+      - Smooth Trace: Applies a weighted moving average to Lat/Lon coordinates. Removes GPS "jitter" or "zigzagging".
+      - Simplify: Reduces file size by removing 50% of points (keeping every 2nd point). Useful for oversized files.
+      - Reverse: Swaps Start and End points. Reverses time flow and direction.
+
+   C. ELEVATION TOOLS
+      - Smooth Altitudes: Applies a moving average to Elevation data. smooths out barometric noise spikes.
+      - Offset All Points: Add or subtract a fixed value (meters) to every point in the track. Useful for calibrating barometric drift.
+
+6.2. TAB 2: POINT (Surgical Editing)
+   Active when a point is selected on the map.
+   
+   - Show/Hide Raw Points: Global toggle to see all track points on the map.
+
+   A. SINGLE POINT MODE
+      - Coordinate Display: Shows precise Lat/Lon/Ele.
+      - Elevation Input: Manually type a new elevation (meters) and press Enter.
+      - Toggle Anchor: Marks point as "Yes or Yes". 
+        *Effect*: Anchors are NEVER deleted by auto-fix/simplify algorithms and NEVER moved by smoothing.
+      - Dragging: Drag the orange marker on map to move Lat/Lon.
+      - Insert Point After: Enters "Insert Mode".
+        1. Creates a Ghost Marker at the mathematical midpoint.
+        2. User clicks map to place it.
+        3. Confirms to save.
+      - Delete: Removes the point.
+
+   B. MULTI-SELECT / BATCH MODE
+      Triggered by selecting >1 point (Ctrl+Click or Shift+Click).
+      - Soft Smooth: Blends selected section (1 pass).
+      - Strong Smooth: Blends selected section (5 passes).
+      - Ultra Smooth: Heavy blending (20 passes).
+      - Fill Gaps (Densify): Checks average track density. If gap between selected points > average, inserts interpolated points.
+      - Reduce (Simplify): Removes every 2nd point within the selection only.
+      - Batch Delete: Removes the entire selected segment.
+
+6.3. TAB 3: CROP (Trimming)
+   - Sliders: Drag Start and End sliders to define the range.
+   - Visual Feedback:
+     - Green Line: Part to be kept.
+     - Dotted Grey Line: Part to be deleted.
+   - Apply Crop: Permanently removes the grey sections. Recalculates all stats from zero.
+
+6.4. TAB 4: FIX (Health Scan)
+   - Start Scan: Analyzes track for physics violations.
+   - Dynamic Thresholds:
+     - Speed Spikes: Detects movement > 100km/h (adjustable based on density).
+     - Elev Jumps: Detects unnatural altitude changes based on adjacent distance.
+     - Distance Gaps: Detects "Teleportation" (signal loss) > 200m-500m depending on track resolution.
+   - Report: Shows count of errors.
+   - Interactive List: Scroll through specific errors.
+     - JUMP: Instantly pans the map to the specific error point.
+     - DELETE: Surgically removes just that point.
+   - Delete Errors: One-click removal of all flagged points (respects Anchors).
+
+6.5. TAB 5: MAGIC (Smart Restoration)
+   The "Smart Lab" Engine.
+   
+   - Smart Restoration Button: Triggers an iterative AI-like reconstruction pipeline.
+   - Context-Aware Heuristics:
+     1. Spikes: Detects geometry deviations (points far from the line between neighbors). Attempts to REPOSITION them first.
+     2. Gaps: Detects missing data segments and FILLS them with interpolated points.
+     3. Jitter: Detects noise and SMOOTHS it locally.
+   - Anchor Preservation: Any point marked as an Anchor is strictly preserved.
+   - Result: A continuous, repaired track with no data loss, preserving the original shape of valid sections.
+
+7. KEYBOARD SHORTCUTS
+--------------------------------------------------------------------------------
+- Click: Select Point.
+- Shift + Click: Range Selection (Selects all points between last click and current click).
+- Ctrl (or Cmd) + Click: Toggle Selection (Add/Remove single point from group).
+- Enter: Confirm Input (in Elevation/Coordinate fields).
+
+8. COMPATIBILITY
+--------------------------------------------------------------------------------
+- Browsers: Chrome, Firefox, Safari, Edge (Modern versions).
+- Devices: Desktop (Recommended), Tablet (Supported).
+- Performance: Optimized for tracks up to ~50,000 points.
+
+9. TECHNICAL APPENDIX: MATHEMATICS & ALGORITHMS
+================================================================================
+This section explains the precise mathematical logic used in GPX Master Pro.
+
+9.1. GEODESY (Distance Calculation)
+--------------------------------------------------------------------------------
+The application uses the Haversine Formula to calculate distances on a sphere (Earth).
+Euclidean distance (Pythagoras) is insufficient due to the Earth's curvature.
+
+Formula:
+  a = sin²(Δφ/2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ/2)
+  c = 2 ⋅ atan2( √a, √(1−a) )
+  d = R ⋅ c
+
+Where:
+  - φ is latitude, λ is longitude (in radians).
+  - R is Earth's radius (approx. 6,371 km).
+  - d is the distance between two points.
+
+9.2. SMOOTHING ALGORITHMS (Low-Pass Filter)
+--------------------------------------------------------------------------------
+To remove GPS "noise" (high-frequency jitter) while preserving the "signal" (the route), 
+we utilize a weighted moving average convolution.
+
+A. Geometry Smoothing (Lat/Lon):
+   We use a kernel window of size 3 with a [1, 2, 1] weighting. This ensures that the 
+   point's original position has the most weight, preventing "corner cutting" on sharp turns.
+
+   NewPoint_i = (Prev_i + 2 * Curr_i + Next_i) / 4
+
+B. Elevation Smoothing:
+   We use a simple unweighted moving window of size 5 to smooth barometric drift.
+   
+   NewEle_i = (Ele_{i-2} + Ele_{i-1} + Ele_i + Ele_{i+1} + Ele_{i+2}) / 5
+
+9.3. INTERPOLATION (Densify & Fill)
+--------------------------------------------------------------------------------
+When filling gaps, the app uses Linear Interpolation (LERP) for 4 dimensions: 
+Latitude, Longitude, Elevation, and Time.
+
+Formula:
+  P(t) = P_start + t * (P_end - P_start)
+  where 't' ranges from 0 to 1 based on the number of steps required to bridge the gap.
+
+Trigger Logic:
+  TargetSpacing = TotalDistance / TotalPoints.
+  If Distance(P_i, P_{i+1}) > TargetSpacing:
+      Inject (Distance / TargetSpacing) new points.
+
+9.4. CONTEXT-AWARE RESTORATION (Magic Engine)
+--------------------------------------------------------------------------------
+The Smart Restoration engine uses vector math to categorize errors.
+
+A. Cross-Track Error (XTE):
+   Calculates the perpendicular distance of a point P from the great-circle line 
+   segment connecting its neighbors (Prev -> Next).
+
+   XTE = asin( sin(Dist_13/R) * sin(Bearing_13 - Bearing_12) ) * R
+
+B. Decision Matrix:
+   1. If Speed > 100km/h AND XTE > 30m:
+      Diagnosed as: GPS Spike/Drift.
+      Action: Projection. The point is moved to the midpoint of the line segment 
+      between Prev and Next.
+
+   2. If Speed is High but XTE is Low (< 10m):
+      Diagnosed as: Longitudinal Noise.
+      Action: Smoothing.
+
+   3. If Distance(Prev, Curr) > (AvgSpacing * 50):
+      Diagnosed as: Teleportation/Signal Loss.
+      Action: Densification (Interpolation).
+
+9.5. GRADIENT & SPEED CALCULATIONS
+--------------------------------------------------------------------------------
+A. Gradient (%):
+   Gradient = (ΔElevation / ΔDistance) * 100
+   *Note: To prevent noise, gradients are only calculated if ΔDistance > 5 meters.*
+
+B. Moving Time:
+   Total Time = EndTime - StartTime.
+   Moving Time = Sum of time deltas where Speed is between 1 km/h and 120 km/h.
+   (This filters out stationary pauses and GPS glitches).
