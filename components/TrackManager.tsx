@@ -19,6 +19,7 @@ interface TrackManagerProps {
 export const TrackManager: React.FC<TrackManagerProps> = ({
     tracks,
     activeTrackId,
+    selectedTrackIds,
     onSelectTrack,
     onToggleVisibility,
     onDeleteTrack,
