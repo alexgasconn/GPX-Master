@@ -19,6 +19,9 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// CARTO API key for raster basemaps (added so tiles remove watermark)
+const CARTO_API_KEY = 'cb1_2hl3_1_c4dfd0f0c288bbb5cd981bed';
+
 // Custom Draggable Icon
 const EditIcon = L.icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
@@ -67,47 +70,47 @@ const GapIcon = L.divIcon({
 });
 
 interface MapViewerProps {
-  tracks: GPXData[];
-  activeTrackId: string | null;
-  hoverIndex: number | null;
-  onTrackClick: (id: string) => void;
-  cropRange: [number, number] | null;
-  // Editing props
-  selectedPointIndex: number | null;
-  selectedIndices: Set<number>;
-  onPointSelect: (index: number | null, isMultiSelect?: boolean, isRangeSelect?: boolean) => void;
-  onPointMove: (index: number, lat: number, lon: number) => void;
-  // Features
-  showPoints: boolean;
-  onToggleShowPoints: () => void;
-  anomalies: AnomalyReport | null;
-  
-  // Pending Point (Insert Mode)
-  pendingPoint: PendingPoint | null;
-  onMapClickForInsert: (lat: number, lon: number) => void;
+    tracks: GPXData[];
+    activeTrackId: string | null;
+    hoverIndex: number | null;
+    onTrackClick: (id: string) => void;
+    cropRange: [number, number] | null;
+    // Editing props
+    selectedPointIndex: number | null;
+    selectedIndices: Set<number>;
+    onPointSelect: (index: number | null, isMultiSelect?: boolean, isRangeSelect?: boolean) => void;
+    onPointMove: (index: number, lat: number, lon: number) => void;
+    // Features
+    showPoints: boolean;
+    onToggleShowPoints: () => void;
+    anomalies: AnomalyReport | null;
+
+    // Pending Point (Insert Mode)
+    pendingPoint: PendingPoint | null;
+    onMapClickForInsert: (lat: number, lon: number) => void;
 }
 
 const MapRecenter: React.FC<{ points: TrackPoint[], trackId: string | null, selectedPointIndex: number | null }> = ({ points, trackId, selectedPointIndex }) => {
-  const map = useMap();
-  
-  // 1. Recenter when Track Changes
-  useEffect(() => {
-    if (points.length > 0) {
-      const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
-      map.fitBounds(bounds, { padding: [50, 50] });
-    }
-  }, [trackId, map]); // Dependent on trackId
+    const map = useMap();
 
-  // 2. Pan when a specific point is Selected (e.g. from Error List)
-  useEffect(() => {
-      if (selectedPointIndex !== null && points[selectedPointIndex]) {
-          const pt = points[selectedPointIndex];
-          // Use panTo for smooth animation, keep current zoom
-          map.panTo([pt.lat, pt.lon], { animate: true, duration: 0.5 });
-      }
-  }, [selectedPointIndex, map]); // Dependent on selectedPointIndex
+    // 1. Recenter when Track Changes
+    useEffect(() => {
+        if (points.length > 0) {
+            const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }, [trackId, map]); // Dependent on trackId
 
-  return null;
+    // 2. Pan when a specific point is Selected (e.g. from Error List)
+    useEffect(() => {
+        if (selectedPointIndex !== null && points[selectedPointIndex]) {
+            const pt = points[selectedPointIndex];
+            // Use panTo for smooth animation, keep current zoom
+            map.panTo([pt.lat, pt.lon], { animate: true, duration: 0.5 });
+        }
+    }, [selectedPointIndex, map]); // Dependent on selectedPointIndex
+
+    return null;
 };
 
 // Component to handle drags on the selected point
@@ -140,7 +143,7 @@ const DraggablePoint: React.FC<{
             zIndexOffset={1000}
         >
             <Popup>
-                <strong>Edit Point #{index}</strong><br/>
+                <strong>Edit Point #{index}</strong><br />
                 Drag to move
             </Popup>
         </Marker>
@@ -177,7 +180,7 @@ const PendingPointMarker: React.FC<{
             zIndexOffset={2000}
         >
             <Popup offset={[0, -30]}>
-                <strong>New Point</strong><br/>
+                <strong>New Point</strong><br />
                 Drag or Click map to place
             </Popup>
         </Marker>
@@ -186,17 +189,17 @@ const PendingPointMarker: React.FC<{
 
 
 // Component to handle clicking on the polyline to find closest point
-const TrackInteraction: React.FC<{ 
-    points: TrackPoint[], 
+const TrackInteraction: React.FC<{
+    points: TrackPoint[],
     isActive: boolean,
     onPointSelect: (index: number, isMultiSelect: boolean, isRangeSelect: boolean) => void,
-    isInsertMode: boolean 
+    isInsertMode: boolean
 }> = ({ points, isActive, onPointSelect, isInsertMode }) => {
-    
+
     if (!isActive || isInsertMode) return null; // Disable selection if inserting
 
     return (
-         <Polyline
+        <Polyline
             positions={points.map(p => [p.lat, p.lon])}
             // INCREASED WEIGHT HERE (25 -> 45) for better click area
             pathOptions={{ color: 'transparent', weight: 45, zIndex: 50 }}
@@ -209,11 +212,11 @@ const TrackInteraction: React.FC<{
                     const clickLon = e.latlng.lng;
 
                     points.forEach((p, i) => {
-                         const d = Math.sqrt(Math.pow(p.lat - clickLat, 2) + Math.pow(p.lon - clickLon, 2));
-                         if (d < minDist) {
-                             minDist = d;
-                             closestIndex = i;
-                         }
+                        const d = Math.sqrt(Math.pow(p.lat - clickLat, 2) + Math.pow(p.lon - clickLon, 2));
+                        if (d < minDist) {
+                            minDist = d;
+                            closestIndex = i;
+                        }
                     });
 
                     if (closestIndex !== -1) {
@@ -232,9 +235,9 @@ const TrackInteraction: React.FC<{
 const CustomMapControl: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <div className="leaflet-bottom leaflet-left" style={{ bottom: '24px', left: '12px', pointerEvents: 'auto', zIndex: 1000 }}>
-             <div className="leaflet-control flex flex-col gap-2">
-                 {children}
-             </div>
+            <div className="leaflet-control flex flex-col gap-2">
+                {children}
+            </div>
         </div>
     );
 };
@@ -254,198 +257,225 @@ const MapClickHandler: React.FC<{ onClick: () => void, onInsertClick: (lat: numb
 };
 
 
-export const MapViewer: React.FC<MapViewerProps> = ({ 
+export const MapViewer: React.FC<MapViewerProps> = ({
     tracks, activeTrackId, hoverIndex, onTrackClick, cropRange,
     selectedPointIndex, selectedIndices, onPointSelect, onPointMove,
     showPoints, onToggleShowPoints, anomalies,
     pendingPoint, onMapClickForInsert
 }) => {
-  const activeTrack = tracks.find(t => t.id === activeTrackId);
-  const visibleTracks = tracks.filter(t => t.visible);
-  const isInsertMode = !!pendingPoint;
-  
-  if (visibleTracks.length === 0) return (
-      <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500 rounded-2xl border border-slate-700">
-          No visible tracks
-      </div>
-  );
+    const activeTrack = tracks.find(t => t.id === activeTrackId);
+    const visibleTracks = tracks.filter(t => t.visible);
+    const isInsertMode = !!pendingPoint;
 
-  const pointsForCenter = activeTrack ? activeTrack.points : visibleTracks[0].points;
-  const hoverPoint = (activeTrack && hoverIndex !== null) ? activeTrack.points[hoverIndex] : null;
-  const selectedPoint = (activeTrack && selectedPointIndex !== null) ? activeTrack.points[selectedPointIndex] : null;
+    if (visibleTracks.length === 0) return (
+        <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500 rounded-2xl border border-slate-700">
+            No visible tracks
+        </div>
+    );
 
-  return (
-    <div className="h-full w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 z-0 relative">
-      <MapContainer 
-        center={[pointsForCenter[0].lat, pointsForCenter[0].lon]} 
-        zoom={13} 
-        maxZoom={22} // Allow higher zoom levels
-        style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={true}
-        preferCanvas={true} // Performance optimization for many points
-        zoomControl={false} // We can add custom zoom control if needed, but keeping standard for now is fine, actually let's move standard to top right
-      >
-        <MapClickHandler 
-            onClick={() => onPointSelect(null)} 
-            onInsertClick={onMapClickForInsert}
-            isInsertMode={isInsertMode}
-        />
-        
-        {/* Custom Toggle Control - Moved to Bottom Left */}
-        <CustomMapControl>
-            <button
-                onClick={(e) => { e.stopPropagation(); onToggleShowPoints(); }}
-                className={`h-10 px-4 flex items-center justify-center gap-2 rounded-xl bg-white/90 backdrop-blur border border-slate-200 hover:bg-white transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 ${showPoints ? 'text-emerald-600 font-bold border-emerald-400 ring-1 ring-emerald-400' : 'text-slate-600'}`}
-                title="Toggle Raw GPX Points Visibility"
+    const pointsForCenter = activeTrack ? activeTrack.points : visibleTracks[0].points;
+    const hoverPoint = (activeTrack && hoverIndex !== null) ? activeTrack.points[hoverIndex] : null;
+    const selectedPoint = (activeTrack && selectedPointIndex !== null) ? activeTrack.points[selectedPointIndex] : null;
+
+    return (
+        <div className="h-full w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700 z-0 relative">
+            <MapContainer
+                center={[pointsForCenter[0].lat, pointsForCenter[0].lon]}
+                zoom={13}
+                maxZoom={22} // Allow higher zoom levels
+                style={{ height: '100%', width: '100%' }}
+                scrollWheelZoom={true}
+                preferCanvas={true} // Performance optimization for many points
+                zoomControl={false} // We can add custom zoom control if needed, but keeping standard for now is fine, actually let's move standard to top right
             >
-                <Disc size={18} />
-                <span className="text-xs font-bold">Raw Points</span>
-            </button>
-            {anomalies?.hasErrors && (
-                <div className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl shadow-lg animate-pulse flex items-center gap-2 border border-red-400">
-                    <AlertCircle size={16} />
-                    <span>Errors Detected</span>
-                </div>
-            )}
-        </CustomMapControl>
+                <MapClickHandler
+                    onClick={() => onPointSelect(null)}
+                    onInsertClick={onMapClickForInsert}
+                    isInsertMode={isInsertMode}
+                />
 
-        <LayersControl position="topright">
-            <LayersControl.BaseLayer checked name="Dark (Carto)">
-                <TileLayer 
-                    attribution='&copy; CARTO' 
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    maxNativeZoom={19}
-                    maxZoom={22}
-                />
-            </LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="Light (Carto)">
-                <TileLayer 
-                    attribution='&copy; CARTO' 
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    maxNativeZoom={19}
-                    maxZoom={22} 
-                />
-            </LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="Satellite (Esri)">
-                <TileLayer 
-                    attribution='Tiles &copy; Esri' 
-                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                    maxNativeZoom={17}
-                    maxZoom={22}
-                />
-            </LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="OpenStreetMap">
-                <TileLayer 
-                    attribution='&copy; OSM' 
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    maxNativeZoom={19}
-                    maxZoom={22}
-                />
-            </LayersControl.BaseLayer>
-        </LayersControl>
-        
-        {/* Update MapRecenter to accept selectedPointIndex for auto-pan */}
-        <MapRecenter 
-            points={pointsForCenter} 
-            trackId={activeTrackId || visibleTracks[0]?.id || null} 
-            selectedPointIndex={selectedPointIndex}
-        />
-        
-        {visibleTracks.map((track) => {
-            const isActive = track.id === activeTrackId;
-            const allPositions = track.points.map(p => [p.lat, p.lon] as [number, number]);
-            
-            // Interaction Layer for Click to Edit
-            if (isActive) {
-                 return (
-                    <React.Fragment key={`interaction-${track.id}`}>
-                        <TrackInteraction 
-                            points={track.points} 
-                            isActive={isActive} 
-                            onPointSelect={onPointSelect} 
-                            isInsertMode={isInsertMode}
+                {/* Custom Toggle Control - Moved to Bottom Left */}
+                <CustomMapControl>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleShowPoints(); }}
+                        className={`h-10 px-4 flex items-center justify-center gap-2 rounded-xl bg-white/90 backdrop-blur border border-slate-200 hover:bg-white transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 ${showPoints ? 'text-emerald-600 font-bold border-emerald-400 ring-1 ring-emerald-400' : 'text-slate-600'}`}
+                        title="Toggle Raw GPX Points Visibility"
+                    >
+                        <Disc size={18} />
+                        <span className="text-xs font-bold">Raw Points</span>
+                    </button>
+                    {anomalies?.hasErrors && (
+                        <div className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl shadow-lg animate-pulse flex items-center gap-2 border border-red-400">
+                            <AlertCircle size={16} />
+                            <span>Errors Detected</span>
+                        </div>
+                    )}
+                </CustomMapControl>
+
+                <LayersControl position="topright">
+                    <LayersControl.BaseLayer checked name="Dark (Carto)">
+                        <TileLayer
+                            attribution='&copy; CARTO'
+                            url={`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`}
+                            maxNativeZoom={19}
+                            maxZoom={22}
                         />
-                         {/* Visual Line */}
-                         {cropRange ? (
-                             // Crop Mode Visualization
-                             <>
-                                <Polyline positions={allPositions} pathOptions={{ color: '#64748b', weight: 2, opacity: 0.3, dashArray: '5, 5' }} />
-                                <Polyline positions={allPositions.slice(cropRange[0], cropRange[1] + 1)} pathOptions={{ color: '#10b981', weight: 6, opacity: 1 }} />
-                             </>
-                         ) : (
-                             // Normal Mode
-                             <Polyline 
-                                positions={allPositions} 
-                                pathOptions={{ 
-                                    color: track.color, 
-                                    weight: isActive ? 4 : 3, 
-                                    opacity: isActive ? 1 : 0.6 
-                                }} 
-                            />
-                         )}
-                         
-                         {/* Visualizing Anchor Points */}
-                         {track.points.map((pt, idx) => {
-                             if (!pt.isAnchor) return null;
-                             return (
-                                <Marker 
-                                    key={`anchor-${idx}`}
-                                    position={[pt.lat, pt.lon]}
-                                    icon={AnchorIcon}
-                                    zIndexOffset={500}
-                                    eventHandlers={{
-                                        click: (e) => {
-                                            if(!isInsertMode) {
-                                                // Anchors are selectable too
-                                                onPointSelect(idx, false, false); 
-                                                L.DomEvent.stopPropagation(e);
-                                            }
-                                        }
-                                    }}
-                                >
-                                    <Popup>
-                                        <strong>Anchor Point</strong><br/>
-                                        Pinned ("Yes or Yes")
-                                    </Popup>
-                                </Marker>
-                             );
-                         })}
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="Light (Carto)">
+                        <TileLayer
+                            attribution='&copy; CARTO'
+                            url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`}
+                            maxNativeZoom={19}
+                            maxZoom={22}
+                        />
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="Satellite (Esri)">
+                        <TileLayer
+                            attribution='Tiles &copy; Esri'
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            maxNativeZoom={17}
+                            maxZoom={22}
+                        />
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="OpenStreetMap">
+                        <TileLayer
+                            attribution='&copy; OSM'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            maxNativeZoom={19}
+                            maxZoom={22}
+                        />
+                    </LayersControl.BaseLayer>
+                </LayersControl>
 
-                         {/* Show Points Feature (Visualizing ALL selected points) */}
-                         {(showPoints || selectedIndices.size > 0) && track.points.map((pt, idx) => {
-                             const isSelected = selectedIndices.has(idx);
-                             // If unselected and showPoints OFF, hide
-                             if (!showPoints && !isSelected) return null;
-                             
-                             if (isSelected) {
-                                 // Render HIGH CONTRAST double-ring for selected points
-                                 return (
-                                    <React.Fragment key={`pt-selected-${idx}`}>
-                                        {/* Outer Halo */}
-                                        <CircleMarker
-                                            center={[pt.lat, pt.lon]}
-                                            radius={9}
-                                            pathOptions={{
-                                                fillColor: 'transparent',
-                                                color: '#ef4444',
-                                                weight: 2,
-                                                opacity: 0.5
+                {/* Update MapRecenter to accept selectedPointIndex for auto-pan */}
+                <MapRecenter
+                    points={pointsForCenter}
+                    trackId={activeTrackId || visibleTracks[0]?.id || null}
+                    selectedPointIndex={selectedPointIndex}
+                />
+
+                {visibleTracks.map((track) => {
+                    const isActive = track.id === activeTrackId;
+                    const allPositions = track.points.map(p => [p.lat, p.lon] as [number, number]);
+
+                    // Interaction Layer for Click to Edit
+                    if (isActive) {
+                        return (
+                            <React.Fragment key={`interaction-${track.id}`}>
+                                <TrackInteraction
+                                    points={track.points}
+                                    isActive={isActive}
+                                    onPointSelect={onPointSelect}
+                                    isInsertMode={isInsertMode}
+                                />
+                                {/* Visual Line */}
+                                {cropRange ? (
+                                    // Crop Mode Visualization
+                                    <>
+                                        <Polyline positions={allPositions} pathOptions={{ color: '#64748b', weight: 2, opacity: 0.3, dashArray: '5, 5' }} />
+                                        <Polyline positions={allPositions.slice(cropRange[0], cropRange[1] + 1)} pathOptions={{ color: '#10b981', weight: 6, opacity: 1 }} />
+                                    </>
+                                ) : (
+                                    // Normal Mode
+                                    <Polyline
+                                        positions={allPositions}
+                                        pathOptions={{
+                                            color: track.color,
+                                            weight: isActive ? 4 : 3,
+                                            opacity: isActive ? 1 : 0.6
+                                        }}
+                                    />
+                                )}
+
+                                {/* Visualizing Anchor Points */}
+                                {track.points.map((pt, idx) => {
+                                    if (!pt.isAnchor) return null;
+                                    return (
+                                        <Marker
+                                            key={`anchor-${idx}`}
+                                            position={[pt.lat, pt.lon]}
+                                            icon={AnchorIcon}
+                                            zIndexOffset={500}
+                                            eventHandlers={{
+                                                click: (e) => {
+                                                    if (!isInsertMode) {
+                                                        // Anchors are selectable too
+                                                        onPointSelect(idx, false, false);
+                                                        L.DomEvent.stopPropagation(e);
+                                                    }
+                                                }
                                             }}
-                                        />
-                                        {/* Inner Core */}
+                                        >
+                                            <Popup>
+                                                <strong>Anchor Point</strong><br />
+                                                Pinned ("Yes or Yes")
+                                            </Popup>
+                                        </Marker>
+                                    );
+                                })}
+
+                                {/* Show Points Feature (Visualizing ALL selected points) */}
+                                {(showPoints || selectedIndices.size > 0) && track.points.map((pt, idx) => {
+                                    const isSelected = selectedIndices.has(idx);
+                                    // If unselected and showPoints OFF, hide
+                                    if (!showPoints && !isSelected) return null;
+
+                                    if (isSelected) {
+                                        // Render HIGH CONTRAST double-ring for selected points
+                                        return (
+                                            <React.Fragment key={`pt-selected-${idx}`}>
+                                                {/* Outer Halo */}
+                                                <CircleMarker
+                                                    center={[pt.lat, pt.lon]}
+                                                    radius={9}
+                                                    pathOptions={{
+                                                        fillColor: 'transparent',
+                                                        color: '#ef4444',
+                                                        weight: 2,
+                                                        opacity: 0.5
+                                                    }}
+                                                />
+                                                {/* Inner Core */}
+                                                <CircleMarker
+                                                    center={[pt.lat, pt.lon]}
+                                                    radius={5}
+                                                    pathOptions={{
+                                                        fillColor: '#ef4444',
+                                                        fillOpacity: 1,
+                                                        color: 'white',
+                                                        weight: 2,
+                                                        opacity: 1
+                                                    }}
+                                                    eventHandlers={{
+                                                        click: (e) => {
+                                                            if (!isInsertMode) {
+                                                                const isMulti = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
+                                                                const isRange = e.originalEvent.shiftKey;
+                                                                onPointSelect(idx, isMulti, isRange);
+                                                                L.DomEvent.stopPropagation(e);
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                            </React.Fragment>
+                                        );
+                                    }
+
+                                    // Standard Point (Small, White)
+                                    return (
                                         <CircleMarker
+                                            key={`pt-${idx}`}
                                             center={[pt.lat, pt.lon]}
-                                            radius={5}
+                                            radius={2}
                                             pathOptions={{
-                                                fillColor: '#ef4444',
-                                                fillOpacity: 1,
-                                                color: 'white',
-                                                weight: 2,
-                                                opacity: 1
+                                                fillColor: 'white',
+                                                fillOpacity: 0.5, // Reduced opacity for visual clarity
+                                                color: 'transparent',
+                                                weight: 0
                                             }}
                                             eventHandlers={{
                                                 click: (e) => {
-                                                    if(!isInsertMode) {
+                                                    if (!isInsertMode) {
                                                         const isMulti = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                                                         const isRange = e.originalEvent.shiftKey;
                                                         onPointSelect(idx, isMulti, isRange);
@@ -454,116 +484,89 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                                                 }
                                             }}
                                         />
-                                    </React.Fragment>
-                                 );
-                             }
+                                    );
+                                })}
 
-                             // Standard Point (Small, White)
-                             return (
-                                <CircleMarker
-                                    key={`pt-${idx}`}
-                                    center={[pt.lat, pt.lon]}
-                                    radius={2}
-                                    pathOptions={{
-                                        fillColor: 'white',
-                                        fillOpacity: 0.5, // Reduced opacity for visual clarity
-                                        color: 'transparent',
-                                        weight: 0
-                                    }}
-                                    eventHandlers={{
-                                        click: (e) => {
-                                            if(!isInsertMode) {
-                                                const isMulti = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
-                                                const isRange = e.originalEvent.shiftKey;
-                                                onPointSelect(idx, isMulti, isRange);
-                                                L.DomEvent.stopPropagation(e);
-                                            }
-                                        }
-                                    }}
-                                />
-                             );
-                         })}
+                                {/* Anomaly Visualization */}
+                                {anomalies && anomalies.speedIndices.map(idx => (
+                                    <Marker
+                                        key={`err-speed-${idx}`}
+                                        position={[track.points[idx].lat, track.points[idx].lon]}
+                                        icon={ErrorIcon}
+                                    >
+                                        <Popup>
+                                            <strong className="text-red-600">Speed Spike</strong><br />
+                                            {track.points[idx].speed.toFixed(1)} km/h
+                                        </Popup>
+                                    </Marker>
+                                ))}
+                                {anomalies && anomalies.elevationIndices.map(idx => (
+                                    <Marker
+                                        key={`err-ele-${idx}`}
+                                        position={[track.points[idx].lat, track.points[idx].lon]}
+                                        icon={ErrorIcon}
+                                    >
+                                        <Popup>
+                                            <strong className="text-red-600">Elevation Jump</strong><br />
+                                            {track.points[idx].ele}m
+                                        </Popup>
+                                    </Marker>
+                                ))}
+                                {anomalies && anomalies.gapIndices.map(idx => (
+                                    <Marker
+                                        key={`err-gap-${idx}`}
+                                        position={[track.points[idx].lat, track.points[idx].lon]}
+                                        icon={GapIcon}
+                                    >
+                                        <Popup>
+                                            <strong className="text-orange-600">Distance Gap</strong><br />
+                                            Possible missing data or GPS jump.
+                                        </Popup>
+                                    </Marker>
+                                ))}
 
-                         {/* Anomaly Visualization */}
-                         {anomalies && anomalies.speedIndices.map(idx => (
-                             <Marker 
-                                key={`err-speed-${idx}`}
-                                position={[track.points[idx].lat, track.points[idx].lon]}
-                                icon={ErrorIcon}
-                             >
-                                 <Popup>
-                                     <strong className="text-red-600">Speed Spike</strong><br/>
-                                     {track.points[idx].speed.toFixed(1)} km/h
-                                 </Popup>
-                             </Marker>
-                         ))}
-                         {anomalies && anomalies.elevationIndices.map(idx => (
-                             <Marker 
-                                key={`err-ele-${idx}`}
-                                position={[track.points[idx].lat, track.points[idx].lon]}
-                                icon={ErrorIcon}
-                             >
-                                 <Popup>
-                                     <strong className="text-red-600">Elevation Jump</strong><br/>
-                                     {track.points[idx].ele}m
-                                 </Popup>
-                             </Marker>
-                         ))}
-                         {anomalies && anomalies.gapIndices.map(idx => (
-                             <Marker 
-                                key={`err-gap-${idx}`}
-                                position={[track.points[idx].lat, track.points[idx].lon]}
-                                icon={GapIcon}
-                             >
-                                 <Popup>
-                                     <strong className="text-orange-600">Distance Gap</strong><br/>
-                                     Possible missing data or GPS jump.
-                                 </Popup>
-                             </Marker>
-                         ))}
+                            </React.Fragment>
+                        )
+                    }
 
-                    </React.Fragment>
-                 )
-            }
+                    return (
+                        <Polyline
+                            key={track.id}
+                            positions={allPositions}
+                            pathOptions={{ color: track.color, weight: 3, opacity: 0.6 }}
+                            eventHandlers={{ click: () => onTrackClick(track.id) }}
+                        />
+                    );
+                })}
 
-            return (
-                <Polyline 
-                    key={track.id}
-                    positions={allPositions} 
-                    pathOptions={{ color: track.color, weight: 3, opacity: 0.6 }}
-                    eventHandlers={{ click: () => onTrackClick(track.id) }}
-                />
-            );
-        })}
+                {/* Hover Highlight */}
+                {hoverPoint && (
+                    <CircleMarker
+                        center={[hoverPoint.lat, hoverPoint.lon]}
+                        pathOptions={{ color: '#ffffff', fillColor: activeTrack?.color || '#a855f7', fillOpacity: 1 }}
+                        radius={8}
+                    />
+                )}
 
-        {/* Hover Highlight */}
-        {hoverPoint && (
-            <CircleMarker 
-                center={[hoverPoint.lat, hoverPoint.lon]} 
-                pathOptions={{ color: '#ffffff', fillColor: activeTrack?.color || '#a855f7', fillOpacity: 1 }} 
-                radius={8} 
-            />
-        )}
+                {/* Selected / Editing Point (Primary Selection) */}
+                {selectedPoint && activeTrack && selectedPointIndex !== null && !isInsertMode && (
+                    <DraggablePoint
+                        point={selectedPoint}
+                        index={selectedPointIndex}
+                        onMove={onPointMove}
+                    />
+                )}
 
-        {/* Selected / Editing Point (Primary Selection) */}
-        {selectedPoint && activeTrack && selectedPointIndex !== null && !isInsertMode && (
-            <DraggablePoint 
-                point={selectedPoint} 
-                index={selectedPointIndex} 
-                onMove={onPointMove}
-            />
-        )}
-        
-        {/* Pending Point (Insert Mode) */}
-        {pendingPoint && (
-             <PendingPointMarker
-                lat={pendingPoint.lat}
-                lon={pendingPoint.lon}
-                onMove={onMapClickForInsert}
-             />
-        )}
+                {/* Pending Point (Insert Mode) */}
+                {pendingPoint && (
+                    <PendingPointMarker
+                        lat={pendingPoint.lat}
+                        lon={pendingPoint.lon}
+                        onMove={onMapClickForInsert}
+                    />
+                )}
 
-      </MapContainer>
-    </div>
-  );
+            </MapContainer>
+        </div>
+    );
 };

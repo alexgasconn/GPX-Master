@@ -32,13 +32,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileLoaded }) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
+      // Support multiple files dropped
+      Array.from(e.dataTransfer.files).forEach(processFile);
     }
   }, [onFileLoaded]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+      // Support multiple file selection
+      Array.from(e.target.files).forEach(processFile);
     }
   };
 
@@ -50,18 +52,19 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileLoaded }) => {
         onDrop={handleDrop}
         className={`
           relative border-4 border-dashed rounded-3xl p-12 text-center transition-all duration-300 ease-in-out cursor-pointer group
-          ${isDragging 
-            ? 'border-emerald-500 bg-emerald-500/10 scale-102 shadow-2xl shadow-emerald-500/20' 
+          ${isDragging
+            ? 'border-emerald-500 bg-emerald-500/10 scale-102 shadow-2xl shadow-emerald-500/20'
             : 'border-slate-700 bg-slate-800/50 hover:border-emerald-400 hover:bg-slate-800'}
         `}
       >
         <input
           type="file"
           accept=".gpx"
+          multiple
           onChange={handleInputChange}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
-        
+
         <div className="flex flex-col items-center justify-center space-y-6 pointer-events-none">
           <div className={`p-6 rounded-full ${isDragging ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-emerald-400 group-hover:scale-110 transition-transform'}`}>
             <Upload size={48} />
