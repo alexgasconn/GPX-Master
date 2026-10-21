@@ -8,9 +8,11 @@ Unlike standard route viewers, this tool allows for "atomic-level" editing of tr
 advanced algorithmic restoration, and multi-track comparison.
 
 Data Privacy: 
-- 100% Client-Side processing.
+- GPX parsing, statistics and file editing run client-side.
 - Files are parsed in browser memory.
-- No data is ever sent to a server.
+- Snap-to-trail sends segment endpoint coordinates and the activity profile to the
+   public Valhalla routing service (valhalla1.openstreetmap.de). The GPX file is not uploaded.
+- Free mode does not make routing requests. Map tiles still use external providers.
 
 2. FILE MANAGEMENT (IMPORT & EXPORT)
 --------------------------------------------------------------------------------
@@ -58,6 +60,30 @@ Data Privacy:
    - Anomaly Markers:
      - Red Dots: Speed Spikes or Elevation Jumps.
      - Orange Dots: Distance Gaps (Teleportation).
+
+3.5. ROUTING MODE AND ROUTE EXTENSION
+    - Magnet (default): Snap to real paths using Valhalla pedestrian or bicycle routing.
+    - Pencil: Free mode connects control points with straight segments, without routing requests.
+    - Activity profile: Senderismo / Trail uses pedestrian routing; Ciclismo / MTB uses
+       bicycle routing. Results depend on OpenStreetMap coverage and access restrictions;
+       the bicycle profile is not a technical MTB difficulty or trail-safety assessment.
+    - "Anadir puntos": Starts continuous extension of the active, visible track.
+       Choose "Al final" or "Al principio" to select the endpoint. Each map click commits
+       one new control point. The dashed rubber band is a direct preview, not a routed preview.
+    - "Terminar" or Escape: Ends extension. Dragging a selected point and confirming a
+       single-point insertion also respect the chosen routing mode and activity profile.
+    - Green outlined nodes are explicit controls. Intermediate routing geometry is stored
+       separately by point role; moving a control regenerates only its two adjacent segments.
+       Imported GPX points are treated as controls. Selecting and moving an intermediate
+       geometry point promotes it to a control. Anchor points remain segment boundaries.
+    - Changing the mode or profile affects subsequent edits, not the entire existing track.
+    - Each successful operation updates statistics and can be undone as a single step.
+       While routing, additional edits are blocked. If the public service is unavailable,
+       the track is unchanged and an error is shown; choose Free mode to work offline.
+    - Public routing has no availability guarantee. Elevation is interpolated from existing
+       endpoints, not obtained from a terrain service. Extended points have no invented times.
+    - GPX export includes the full resulting geometry. Control/geometry roles are editor
+       session metadata and are not preserved when exporting and reloading a GPX file.
 
 4. DATA STATISTICS (DASHBOARD)
 --------------------------------------------------------------------------------

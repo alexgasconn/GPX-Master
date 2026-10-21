@@ -7,7 +7,12 @@ export interface TrackPoint {
   speed: number; // Speed at this point in km/h
   gradient: number; // Slope percentage
   isAnchor?: boolean; // If true, this point should not be moved or deleted by algorithms
+  routingRole?: 'control' | 'geometry';
 }
+
+export type RoutingMode = 'snap' | 'free';
+export type RoutingProfile = 'pedestrian' | 'bicycle';
+export type ExtensionEnd = 'start' | 'end';
 
 export interface GPXStatistics {
   totalDistance: number; // km

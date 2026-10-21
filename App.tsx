@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { StatsPanel } from './components/StatsPanel';
 import { AnalysisCharts } from './components/AnalysisCharts';
 import { MapViewer } from './components/MapViewer';
 import { TrackManager } from './components/TrackManager';
 import { TrackEditor } from './components/TrackEditor';
-import { parseGPXFile, updateTrackPoint, deleteTrackPoint, insertTrackPoint, calculateInterpolatedPoint, deleteMultipleTrackPoints, smoothSelectedPoints, densifyTrackSegment, simplifySelectedPoints, toggleTrackAnchor, offsetTrackElevation } from './services/gpxUtils';
-import { GPXData, AnomalyReport, PendingPoint } from './types';
+import { parseGPXFile, updateTrackPoint, deleteTrackPoint, calculateInterpolatedPoint, deleteMultipleTrackPoints, smoothSelectedPoints, densifyTrackSegment, simplifySelectedPoints, toggleTrackAnchor, offsetTrackElevation } from './services/gpxUtils';
+import { GPXData, AnomalyReport, PendingPoint, RoutingMode, RoutingProfile, ExtensionEnd } from './types';
+import { extendRoute, insertRoutedPoint, moveRoutedPoint } from './services/routing';
 import { Activity, Plus, PanelLeftOpen, LineChart, Wrench } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -30,6 +31,21 @@ const App: React.FC = () => {
 
     // State for creating a NEW point
     const [pendingPoint, setPendingPoint] = useState<PendingPoint | null>(null);
+    const [routingMode, setRoutingMode] = useState<RoutingMode>('snap');
+    const [routingProfile, setRoutingProfile] = useState<RoutingProfile>('pedestrian');
+    const [extensionEnd, setExtensionEnd] = useState<ExtensionEnd | null>(null);
+    const [routingBusy, setRoutingBusy] = useState(false);
+    const [routingError, setRoutingError] = useState<string | null>(null);
+    const routingLock = useRef(false);
+    const tracksRef = useRef(tracks);
+    const activeTrackIdRef = useRef(activeTrackId);
+    tracksRef.current = tracks;
+    activeTrackIdRef.current = activeTrackId;
+
+    useEffect(() => {
+        setExtensionEnd(null);
+        setRoutingError(null);
+    }, [activeTrackId]);
 
     // State for Map Visualization Features
     const [showPoints, setShowPoints] = useState(false);
@@ -65,19 +81,52 @@ const App: React.FC = () => {
         setTracks(prev => prev.map(t => t.id === updatedTrack.id ? updatedTrack : t));
     };
 
+    const applyRouteEdit = async (edit: (track: GPXData) => ReturnType<typeof moveRoutedPoint>) => {
+        if (!activeTrack || routingLock.current) return false;
+        const source = activeTrack;
+        routingLock.current = true;
+        setRoutingBusy(true);
+        setRoutingError(null);
+        try {
+            const result = await edit(source);
+            if (activeTrackIdRef.current !== source.id) return false;
+            const latest = tracksRef.current.find(track => track.id === source.id);
+            if (!latest || latest.points !== source.points) {
+                throw new Error('La ruta ha cambiado durante el calculo. Repite la operacion.');
+            }
+            updateTrack({ ...latest, points: result.track.points, stats: result.track.stats, history: result.track.history });
+            setSelectedPointIndex(result.selectedIndex);
+            setSelectedIndices(new Set([result.selectedIndex]));
+            setHoverIndex(null);
+            setAnomalyReport(null);
+            setCropRange(null);
+            return true;
+        } catch (error) {
+            if (activeTrackIdRef.current === source.id) {
+                setRoutingError(error instanceof Error ? error.message : 'No se pudo calcular la ruta.');
+            }
+            return false;
+        } finally {
+            routingLock.current = false;
+            setRoutingBusy(false);
+        }
+    };
+
     // Editing Handlers
     const handlePointMove = (index: number, lat: number, lon: number) => {
-        if (!activeTrack) return;
-        // When dragging map, preserve current elevation
-        const currentEle = activeTrack.points[index].ele;
-        const updated = updateTrackPoint(activeTrack, index, lat, lon, currentEle);
-        updateTrack(updated);
+        const point = activeTrack?.points[index];
+        if (!point) return;
+        void applyRouteEdit(track => moveRoutedPoint(track, index, { lat, lon, ele: point.ele }, routingMode, routingProfile));
     };
 
     const handlePointEdit = (index: number, lat: number, lon: number, ele: number) => {
-        if (!activeTrack) return;
-        const updated = updateTrackPoint(activeTrack, index, lat, lon, ele);
-        updateTrack(updated);
+        if (!activeTrack || routingLock.current) return;
+        const point = activeTrack.points[index];
+        if (point.lat === lat && point.lon === lon) {
+            updateTrack(updateTrackPoint(activeTrack, index, lat, lon, ele));
+        } else {
+            void applyRouteEdit(track => moveRoutedPoint(track, index, { lat, lon, ele }, routingMode, routingProfile));
+        }
     };
 
     const handleToggleAnchor = (index: number) => {
@@ -140,7 +189,8 @@ const App: React.FC = () => {
     // --- Insert Point Workflow ---
 
     const handleStartInsert = (index: number) => {
-        if (!activeTrack) return;
+        if (!activeTrack || routingLock.current) return;
+        setExtensionEnd(null);
         const defaults = calculateInterpolatedPoint(activeTrack, index);
         setPendingPoint({
             lat: defaults.lat,
@@ -155,27 +205,12 @@ const App: React.FC = () => {
         setPendingPoint(prev => prev ? { ...prev, lat, lon, ele } : null);
     };
 
-    const handleConfirmInsert = () => {
+    const handleConfirmInsert = async () => {
         if (!activeTrack || !pendingPoint) return;
-
         const defaults = calculateInterpolatedPoint(activeTrack, pendingPoint.index);
-
-        const updated = insertTrackPoint(
-            activeTrack,
-            pendingPoint.index,
-            pendingPoint.lat,
-            pendingPoint.lon,
-            pendingPoint.ele,
-            defaults.time // use interpolated time
-        );
-
-        updateTrack(updated);
-        setPendingPoint(null);
-
-        // Select the new point
-        const newIndex = pendingPoint.index + 1;
-        setSelectedPointIndex(newIndex);
-        setSelectedIndices(new Set([newIndex]));
+        const applied = await applyRouteEdit(track => insertRoutedPoint(track, pendingPoint.index,
+            { lat: pendingPoint.lat, lon: pendingPoint.lon, ele: pendingPoint.ele, time: defaults.time }, routingMode, routingProfile));
+        if (applied) setPendingPoint(null);
     };
 
     const handleCancelInsert = () => {
@@ -184,9 +219,20 @@ const App: React.FC = () => {
 
     // Map Click handler for "Add Mode"
     const handleMapClickForInsert = (lat: number, lon: number) => {
+        if (routingLock.current) return;
         if (pendingPoint) {
             handleUpdatePendingPoint(lat, lon, pendingPoint.ele);
         }
+    };
+
+    const handleExtensionChange = (end: ExtensionEnd | null) => {
+        if (routingLock.current) return;
+        setExtensionEnd(end);
+        setPendingPoint(null);
+        setSelectedPointIndex(null);
+        setSelectedIndices(new Set());
+        setCropRange(null);
+        setRoutingError(null);
     };
 
 
@@ -317,7 +363,7 @@ const App: React.FC = () => {
                     </div>
                 ) : (
                     // Dashboard Grid
-                    <div className="w-full h-full grid grid-cols-12 grid-rows-[auto_1fr] p-2 gap-2 lg:gap-3">
+                    <div className="w-full h-full grid grid-cols-12 auto-rows-max lg:auto-rows-auto lg:grid-rows-[auto_1fr] overflow-y-auto lg:overflow-hidden p-2 gap-2 lg:gap-3">
 
                         {/* Top Stats Bar - Full Width */}
                         <div className="col-span-12 h-auto flex-none">
@@ -332,7 +378,7 @@ const App: React.FC = () => {
 
                         {/* Left Sidebar: Track List (Collapsible) */}
                         {isSidebarOpen && (
-                            <div className="col-span-12 lg:col-span-2 xl:col-span-2 flex flex-col gap-3 min-h-0 min-w-0">
+                            <div className="col-span-12 lg:col-span-2 xl:col-span-2 flex flex-col gap-3 min-h-0 min-w-0 h-40 lg:h-full">
                                 <div className="flex-1 min-h-0 overflow-hidden shadow-xl rounded-2xl h-full">
                                     <TrackManager
                                         tracks={tracks}
@@ -377,7 +423,7 @@ const App: React.FC = () => {
                         )}
 
                         {/* Center: Map (Dynamic Width) */}
-                        <div className={`col-span-12 ${isSidebarOpen ? 'lg:col-span-7 xl:col-span-7' : 'lg:col-span-9 xl:col-span-9'} min-h-0 min-w-0 relative group h-full`}>
+                        <div className={`col-span-12 ${isSidebarOpen ? 'lg:col-span-7 xl:col-span-7' : 'lg:col-span-9 xl:col-span-9'} min-h-[360px] lg:min-h-0 min-w-0 relative group h-[60vh] lg:h-full`}>
                             <MapViewer
                                 tracks={tracks}
                                 activeTrackId={activeTrackId}
@@ -400,6 +446,18 @@ const App: React.FC = () => {
                                 // New Insert Mode Props
                                 pendingPoint={pendingPoint}
                                 onMapClickForInsert={handleMapClickForInsert}
+                                routingMode={routingMode}
+                                onRoutingModeChange={setRoutingMode}
+                                routingProfile={routingProfile}
+                                onRoutingProfileChange={setRoutingProfile}
+                                extensionEnd={extensionEnd}
+                                onExtensionChange={handleExtensionChange}
+                                onExtendPoint={(lat, lon) => {
+                                    if (extensionEnd) void applyRouteEdit(track => extendRoute(track, extensionEnd, { lat, lon }, routingMode, routingProfile));
+                                }}
+                                routingBusy={routingBusy}
+                                routingError={routingError}
+                                onDismissRoutingError={() => setRoutingError(null)}
                             />
 
                             {/* Expand Sidebar Button (Floating) */}
@@ -415,7 +473,7 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Right Sidebar: Analysis & Editor (Fixed) */}
-                        <div className="col-span-12 lg:col-span-3 xl:col-span-3 flex flex-col gap-3 min-h-0 min-w-0 overflow-hidden shadow-xl rounded-2xl h-full">
+                        <div className="col-span-12 lg:col-span-3 xl:col-span-3 flex flex-col gap-3 min-h-0 min-w-0 overflow-hidden shadow-xl rounded-2xl h-[480px] lg:h-full">
                             {activeTrack ? (
                                 <>
                                     {/* Toggle Header */}
@@ -447,7 +505,7 @@ const App: React.FC = () => {
                                     )}
 
                                     {rightPanelMode === 'editor' && (
-                                        <div className="flex-1 min-h-0 overflow-hidden relative">
+                                        <div className="flex-1 min-h-0 overflow-hidden relative" inert={routingBusy}>
                                             <TrackEditor
                                                 track={activeTrack}
                                                 onUpdateTrack={updateTrack}

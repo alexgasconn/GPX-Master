@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, CircleMarker, Marker, Popup, LayersControl, useMapEvents } from 'react-leaflet';
-import { GPXData, TrackPoint, AnomalyReport, PendingPoint } from '../types';
+import { GPXData, TrackPoint, AnomalyReport, PendingPoint, RoutingMode, RoutingProfile, ExtensionEnd } from '../types';
 import L from 'leaflet';
-import { Disc, AlertCircle } from 'lucide-react';
+import { Disc, AlertCircle, Magnet, Pencil, Plus, Check, X, LoaderCircle } from 'lucide-react';
 
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
 const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
@@ -88,7 +88,56 @@ interface MapViewerProps {
     // Pending Point (Insert Mode)
     pendingPoint: PendingPoint | null;
     onMapClickForInsert: (lat: number, lon: number) => void;
+    routingMode: RoutingMode;
+    onRoutingModeChange: (mode: RoutingMode) => void;
+    routingProfile: RoutingProfile;
+    onRoutingProfileChange: (profile: RoutingProfile) => void;
+    extensionEnd: ExtensionEnd | null;
+    onExtensionChange: (end: ExtensionEnd | null) => void;
+    onExtendPoint: (lat: number, lon: number) => void;
+    routingBusy: boolean;
+    routingError: string | null;
+    onDismissRoutingError: () => void;
 }
+
+const ExtensionInteraction: React.FC<{
+    endpoint: TrackPoint | undefined;
+    enabled: boolean;
+    busy: boolean;
+    onExtend: (lat: number, lon: number) => void;
+    onFinish: () => void;
+}> = ({ endpoint, enabled, busy, onExtend, onFinish }) => {
+    const [cursor, setCursor] = useState<[number, number] | null>(null);
+    const map = useMapEvents({
+        click: event => {
+            if (enabled && !busy) onExtend(event.latlng.lat, event.latlng.lng);
+        },
+        mousemove: event => {
+            if (enabled && !busy) setCursor([event.latlng.lat, event.latlng.lng]);
+        },
+        mouseout: () => setCursor(null)
+    });
+    useEffect(() => {
+        const container = map.getContainer();
+        const previousCursor = container.style.cursor;
+        container.style.cursor = busy ? 'wait' : enabled ? 'crosshair' : previousCursor;
+        const doubleClickZoom = map.doubleClickZoom.enabled();
+        if (enabled) map.doubleClickZoom.disable();
+        const finish = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && enabled && !busy) onFinish();
+        };
+        window.addEventListener('keydown', finish);
+        return () => {
+            container.style.cursor = previousCursor;
+            if (doubleClickZoom) map.doubleClickZoom.enable();
+            window.removeEventListener('keydown', finish);
+        };
+    }, [map, enabled, busy, onFinish]);
+    useEffect(() => { setCursor(null); }, [enabled, busy]);
+    if (!enabled || busy || !endpoint || !cursor) return null;
+    return <Polyline positions={[[endpoint.lat, endpoint.lon], cursor]} interactive={false}
+        pathOptions={{ color: '#10b981', weight: 3, dashArray: '6, 6' }} />;
+};
 
 const MapRecenter: React.FC<{ points: TrackPoint[], trackId: string | null, selectedPointIndex: number | null }> = ({ points, trackId, selectedPointIndex }) => {
     const map = useMap();
@@ -233,8 +282,14 @@ const TrackInteraction: React.FC<{
 
 // Map Control Button UI
 const CustomMapControl: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const controlRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!controlRef.current) return;
+        L.DomEvent.disableClickPropagation(controlRef.current);
+        L.DomEvent.disableScrollPropagation(controlRef.current);
+    }, []);
     return (
-        <div className="leaflet-bottom leaflet-left" style={{ bottom: '24px', left: '12px', pointerEvents: 'auto', zIndex: 1000 }}>
+        <div ref={controlRef} className="leaflet-bottom leaflet-left" style={{ bottom: '24px', left: '12px', pointerEvents: 'auto', zIndex: 1000 }}>
             <div className="leaflet-control flex flex-col gap-2">
                 {children}
             </div>
@@ -261,11 +316,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     tracks, activeTrackId, hoverIndex, onTrackClick, cropRange,
     selectedPointIndex, selectedIndices, onPointSelect, onPointMove,
     showPoints, onToggleShowPoints, anomalies,
-    pendingPoint, onMapClickForInsert
+    pendingPoint, onMapClickForInsert,
+    routingMode, onRoutingModeChange, routingProfile, onRoutingProfileChange,
+    extensionEnd, onExtensionChange, onExtendPoint, routingBusy, routingError, onDismissRoutingError
 }) => {
     const activeTrack = tracks.find(t => t.id === activeTrackId);
     const visibleTracks = tracks.filter(t => t.visible);
-    const isInsertMode = !!pendingPoint;
+    const isInsertMode = !!pendingPoint || !!extensionEnd || routingBusy;
 
     if (visibleTracks.length === 0) return (
         <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500 rounded-2xl border border-slate-700">
@@ -273,7 +330,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         </div>
     );
 
-    const pointsForCenter = activeTrack ? activeTrack.points : visibleTracks[0].points;
+    const pointsForCenter = activeTrack?.points.length ? activeTrack.points : visibleTracks.find(track => track.points.length > 0)?.points;
+    if (!pointsForCenter) return <div className="h-full flex items-center justify-center text-slate-400">No hay puntos visibles</div>;
+    const canExtend = !!activeTrack?.visible && activeTrack.points.length > 0;
+    const endpoint = extensionEnd === 'start' ? activeTrack?.points[0] : activeTrack?.points[activeTrack.points.length - 1];
     const hoverPoint = (activeTrack && hoverIndex !== null) ? activeTrack.points[hoverIndex] : null;
     const selectedPoint = (activeTrack && selectedPointIndex !== null) ? activeTrack.points[selectedPointIndex] : null;
 
@@ -289,10 +349,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 zoomControl={false} // We can add custom zoom control if needed, but keeping standard for now is fine, actually let's move standard to top right
             >
                 <MapClickHandler
-                    onClick={() => onPointSelect(null)}
-                    onInsertClick={onMapClickForInsert}
+                    onClick={() => { if (!extensionEnd && !routingBusy) onPointSelect(null); }}
+                    onInsertClick={(lat, lon) => { if (pendingPoint && !routingBusy) onMapClickForInsert(lat, lon); }}
                     isInsertMode={isInsertMode}
                 />
+                <ExtensionInteraction endpoint={endpoint} enabled={!!extensionEnd && canExtend} busy={routingBusy}
+                    onExtend={onExtendPoint} onFinish={() => onExtensionChange(null)} />
 
                 {/* Custom Toggle Control - Moved to Bottom Left */}
                 <CustomMapControl>
@@ -379,6 +441,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                                     // Normal Mode
                                     <Polyline
                                         positions={allPositions}
+                                        interactive={false}
                                         pathOptions={{
                                             color: track.color,
                                             weight: isActive ? 4 : 3,
@@ -413,6 +476,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                                         </Marker>
                                     );
                                 })}
+
+                                {track.points.map((point, index) => point.routingRole === 'control' && !point.isAnchor ? (
+                                    <CircleMarker key={`control-${index}`} center={[point.lat, point.lon]} radius={5}
+                                        interactive={!isInsertMode}
+                                        pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 2 }}
+                                        eventHandlers={{
+                                            click: event => {
+                                                if (isInsertMode) return;
+                                                L.DomEvent.stopPropagation(event);
+                                                onPointSelect(index, event.originalEvent.ctrlKey || event.originalEvent.metaKey, event.originalEvent.shiftKey);
+                                            }
+                                        }} />
+                                ) : null)}
 
                                 {/* Show Points Feature (Visualizing ALL selected points) */}
                                 {(showPoints || selectedIndices.size > 0) && track.points.map((pt, idx) => {
@@ -533,6 +609,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                         <Polyline
                             key={track.id}
                             positions={allPositions}
+                            interactive={!extensionEnd && !routingBusy}
                             pathOptions={{ color: track.color, weight: 3, opacity: 0.6 }}
                             eventHandlers={{ click: () => onTrackClick(track.id) }}
                         />
@@ -558,7 +635,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 )}
 
                 {/* Pending Point (Insert Mode) */}
-                {pendingPoint && (
+                {pendingPoint && !routingBusy && (
                     <PendingPointMarker
                         lat={pendingPoint.lat}
                         lon={pendingPoint.lon}
@@ -567,6 +644,46 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 )}
 
             </MapContainer>
+            <div className="absolute top-3 left-3 right-14 z-[1000] flex flex-col items-start gap-2 pointer-events-none">
+                <div className="max-w-full flex flex-wrap items-center gap-1 p-1 bg-slate-900/95 border border-slate-600 rounded-lg shadow-lg pointer-events-auto">
+                    <div role="group" aria-label="Modo de enrutamiento" className="flex gap-1">
+                        <button type="button" aria-pressed={routingMode === 'snap'} title="Ajustar a caminos reales"
+                            disabled={routingBusy} onClick={() => onRoutingModeChange('snap')}
+                            className={`h-9 w-9 flex items-center justify-center rounded-md disabled:opacity-50 ${routingMode === 'snap' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
+                            <Magnet size={18} aria-hidden="true" /><span className="sr-only">Ajustar a caminos</span>
+                        </button>
+                        <button type="button" aria-pressed={routingMode === 'free'} title="Modo libre: linea recta"
+                            disabled={routingBusy} onClick={() => onRoutingModeChange('free')}
+                            className={`h-9 w-9 flex items-center justify-center rounded-md disabled:opacity-50 ${routingMode === 'free' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
+                            <Pencil size={18} aria-hidden="true" /><span className="sr-only">Modo libre</span>
+                        </button>
+                    </div>
+                    <select aria-label="Perfil de actividad" title="Perfil de actividad" value={routingProfile}
+                        disabled={routingMode === 'free' || routingBusy} onChange={event => onRoutingProfileChange(event.target.value as RoutingProfile)}
+                        className="h-9 min-w-0 max-w-full bg-slate-800 text-slate-100 text-xs px-2 rounded-md border border-slate-600 disabled:opacity-50">
+                        <option value="pedestrian">Senderismo / Trail</option>
+                        <option value="bicycle">Ciclismo / MTB</option>
+                    </select>
+                    <button type="button" aria-pressed={!!extensionEnd} disabled={!canExtend || routingBusy}
+                        onClick={() => onExtensionChange(extensionEnd ? null : 'end')}
+                        className={`h-9 px-2 flex items-center gap-2 text-xs font-bold rounded-md disabled:opacity-50 ${extensionEnd ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
+                        {extensionEnd ? <Check size={16} /> : <Plus size={16} />}
+                        {extensionEnd ? 'Terminar' : 'Anadir puntos'}
+                    </button>
+                    {extensionEnd && <select aria-label="Extremo de extension" value={extensionEnd} disabled={routingBusy}
+                        onChange={event => onExtensionChange(event.target.value as ExtensionEnd)}
+                        className="h-9 bg-slate-800 text-white text-xs px-2 rounded-md border border-slate-600">
+                        <option value="end">Al final</option><option value="start">Al principio</option>
+                    </select>}
+                </div>
+                {routingBusy && <div role="status" className="flex items-center gap-2 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-lg">
+                    <LoaderCircle size={16} className="animate-spin" /> Calculando ruta...
+                </div>}
+                {routingError && <div role="alert" className="max-w-full flex items-start gap-2 bg-red-950 text-red-100 border border-red-600 text-xs p-2 rounded-lg shadow-lg pointer-events-auto">
+                    <AlertCircle size={16} className="shrink-0" /><span className="min-w-0 break-words">{routingError}</span>
+                    <button type="button" title="Cerrar error" aria-label="Cerrar error" onClick={onDismissRoutingError} className="shrink-0 p-1"><X size={14} /></button>
+                </div>}
+            </div>
         </div>
     );
 };
